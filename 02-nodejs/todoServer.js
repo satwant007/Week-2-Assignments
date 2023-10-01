@@ -39,11 +39,125 @@
 
   Testing the server - run `npm run test-todoServer` command in terminal
  */
+const fs = require('fs')
+const todoListPath = 'todoList.json'
 const express = require('express');
 const bodyParser = require('body-parser');
-
+const { resourceUsage } = require('process');
 const app = express();
-
+const port = 3000
 app.use(bodyParser.json());
+app.listen(port, () => {
+  console.log(`Todo app listening on port ${port}`)
+})
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: false }));
 
-module.exports = app;
+/* --------------------------------------------- */
+/* --------------------------------------------- */
+
+/* --------------------------------------------- */
+/* --------------------------------------------- */
+
+var currentTodos = readExistingTodosFromDB()
+app.get('/todo', getAllTodo)
+app.get('/todo/:id', getTodoById)
+app.post('/todos', createNewTodo)
+
+/**
+ * create a consitent logic for having a base id when we start the server
+ */
+
+function getNewToDoId() {
+  var randomNumber;
+  while(true){
+    randomNumber = Math.floor(Math.random() * 1000) + 1;
+    if(!Object.keys(currentTodos).includes(randomNumber))
+      return randomNumber
+  }
+  return -1;
+}
+
+function getAllTodo(req,res){
+  console.log("Get Todo")
+  currentTodos = readExistingTodosFromDB()
+  // const descriptionList = currentTodos.map((currTodo) => currTodo.description).join('\n')
+  res.send(Object.values(currentTodos))
+}
+
+function getTodoById(req, res){
+  const id = req.params.id
+  if(Object.keys(currentTodos).includes(id)){
+    res.status(200).json(currentTodos[id]);
+  }
+  else {
+    res.status(404).json("not a clue");
+  }
+}
+
+function readExistingTodosFromDB(){
+  var jsonList = {};
+  try{
+    var data = fs.readFileSync(todoListPath, 'utf8');
+    const jsonData = JSON.parse(data);
+    jsonData.map((jsonEntry)=>{
+      jsonList[jsonEntry.id] = jsonEntry
+    })
+    return jsonList;
+
+  } catch (error){
+    console.log('Error reading or parsing JSON data:', error)
+  }
+}
+
+function writeTodosToDB(){
+  const updatedTodosJson = JSON.stringify(Object.values(currentTodos), null, 2);
+  fs.writeFile(todoListPath, updatedTodosJson, (err) => {
+    if (err) {
+      console.error('Error writing file:', err);
+    } else {
+      console.log('Todo added and saved successfully.');
+    }
+  })
+}
+
+function createNewTodo(req,res){
+  const requestBody = req.body;
+  
+  if(validateTodo(requestBody) ){
+    const idForNewTodo = getNewToDoId()
+    requestBody.id = idForNewTodo
+    console.log(requestBody)
+
+    currentTodos[idForNewTodo] = requestBody
+    writeTodosToDB()
+    console.log(Object.values(currentTodos))
+    res.status(200).send()
+  }
+  else {
+    console.log("no woohoo")
+    res.status(400).send()
+  }
+}
+
+function validateTodo(requestBody){
+  const title = requestBody.title;
+  const completed = requestBody.completed;
+  const description = requestBody.description;
+  console.log("requestBody ", requestBody)
+  return (
+    // true
+    title //&& !title.trim() === ''
+    && description// && !description.trim() === ''
+    && completed!==null //&& (completed == true || completed == false)
+    );
+}
+
+
+/*
+curl -X POST http://localhost:3000/todos -H "Content-Type: application/json" -d '{
+  "title": "Buy groceries",
+  "completed": false,
+  "description": "I should buy groceries"
+}'
+*/
